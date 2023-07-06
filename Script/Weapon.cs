@@ -1,66 +1,139 @@
 using System.Collections;
+using TreeEditor;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class Weapon : MonoBehaviour
 {
+    //private float attackRate = 1f;           //공격속도
     [SerializeField]
-    private GameObject bulletObjA;
+    private float maxShotDelay;
     [SerializeField]
-    private GameObject bulletObjB;
-    [SerializeField]
-    private float attackRate;           //공격속도
-    [SerializeField]
-    private int power = 1;              //공격레벨
+    private float curShotDelay;
     
-    private bool isAttack;
-    
-    public void StartFiring()
+    private int damage = 150;           //폭탄 데미지
+    public GameObject boomEffect;       //폭탄
+    public int boom;                    //현재 폭탄
+    public int maxBoom;                 //최대 폭탄
+    public int power = 1;              //공격레벨
+    public int maxPower;               //최대레벨
+
+    public GameObject[] followers;      //보조무기
+    public ObjectManager objectManager;
+   
+    public bool isBoomTime;
+
+    public int Boom => boom;
+
+    private void Update()
     {
-        StopCoroutine(TryAttack());
-        isAttack = true;
-        StartCoroutine(TryAttack());
+        TryAttack();
+        Reload();
     }
-    
-    public void StopFiring()
-    {   
-        isAttack = false;
-         StopCoroutine(TryAttack());  
-    }
+    private void TryAttack()
+    {
+        if (!Input.GetButton("Fire1")) return;
 
-    private IEnumerator TryAttack()
-    {     
-        while (isAttack)
-        {
-            //발사체 생성
-            //Instantiate(bulletObjA, transform.position, Quaternion.identity);
+        if (curShotDelay < maxShotDelay) return;
 
-            AttackByLevel();
-            
-            yield return new WaitForSeconds(attackRate);
-        }
+        AttackByLevel();
+        
+        curShotDelay = 0;
     }
 
     private void AttackByLevel()
     {
-        GameObject clonebullet = null;
+        GameObject cloneBullet = null;
         switch(power)
         {
             case 1: //발사체 1개
-                GameObject bullet = Instantiate(bulletObjA, transform.position, Quaternion.identity);
+                GameObject bullet = objectManager.MakeObj("BulletPlayerA");
+                bullet.transform.position = transform.position;
+                    
                 break;
             case 2: //발사체 2개
-                GameObject bulletL = Instantiate(bulletObjA, transform.position + Vector3.left * 0.2f, Quaternion.identity);
-                GameObject bulletR = Instantiate(bulletObjA, transform.position + Vector3.right * 0.2f, Quaternion.identity);
+                GameObject bulletL = objectManager.MakeObj("BulletPlayerA");
+                bulletL.transform.position = transform.position + Vector3.left * 0.2f;
+                
+                GameObject bulletR = objectManager.MakeObj("BulletPlayerA");
+                bulletR.transform.position = transform.position + Vector3.right * 0.2f;
+                
                 break;
-            case 3: //전방 bulletObjB 1개  좌우 bulletObjA 각 1개
-                GameObject bulletC = Instantiate(bulletObjB, transform.position, Quaternion.identity);
+            default: //전방 bulletObjB 1개  좌우 bulletObjA 각 1개
+                GameObject bulletC = objectManager.MakeObj("BulletPlayerB");
+                bulletC.transform.position = transform.position;
+
                 //왼쪽 발사체
-                clonebullet = Instantiate(bulletObjA, transform.position, Quaternion.identity);
-                clonebullet.GetComponent<Movement2D>().MoveTo(new Vector3(-0.2f, 1, 0));
+                cloneBullet = objectManager.MakeObj("BulletPlayerA");
+                cloneBullet.transform.position = transform.position + Vector3.left * 0.3f;        
                 //오른쪽 발사체
-                clonebullet = Instantiate(bulletObjA, transform.position, Quaternion.identity);
-                clonebullet.GetComponent<Movement2D>().MoveTo(new Vector3(0.2f, 1, 0));
+                cloneBullet = objectManager.MakeObj("BulletPlayerA");
+                cloneBullet.transform.position = transform.position + Vector3.right * 0.3f;
                 break;
         }
     }
+
+    private void Reload()
+    {
+        curShotDelay += Time.deltaTime;
+    }
+
+    public void AddFollower()
+    {
+        if (power == 4)
+            followers[0].SetActive(true);
+        else if (power == 5)
+            followers[1].SetActive(true);
+        else if (power == 6)
+            followers[2].SetActive(true);
+    }
+
+    //폭탄 공격
+    public void OnBoom()
+    {
+        if (isBoomTime) return;
+        if (boom == 0) return;
+
+        boom--;
+        isBoomTime = true;
+        boomEffect.SetActive(true);
+        Invoke("OffBoomEffect", 2f);
+
+        GameObject[] enemiesL = objectManager.GetPool("EnemyL");
+        GameObject[] enemiesM = objectManager.GetPool("EnemyM");
+        GameObject[] enemiesS = objectManager.GetPool("EnemyS");
+        GameObject[] boss = objectManager.GetPool("EnemyB");
+
+        for (int i = 0; i < enemiesL.Length; ++i)
+        {
+            if (enemiesL[i].activeSelf)
+            {
+                enemiesL[i].GetComponent<Enemy>().OnDie();
+            }
+        }
+        for (int i = 0; i < enemiesM.Length; ++i)
+        {
+            if (enemiesM[i].activeSelf)
+            {
+                enemiesM[i].GetComponent<Enemy>().OnDie();
+            }
+        }
+        for (int i = 0; i < enemiesS.Length; ++i)
+        {
+            if (enemiesS[i].activeSelf)
+            {
+                enemiesS[i].GetComponent<Enemy>().OnDie();
+            }
+        }
+        for(int i=0; i < boss.Length; ++i)
+        {
+            boss[i].GetComponent<BossHP>().TakeDamage(damage);
+        }
+    }
+    private void OffBoomEffect()
+    {
+        boomEffect.SetActive(false);
+        isBoomTime = false;
+    }
+
 }
